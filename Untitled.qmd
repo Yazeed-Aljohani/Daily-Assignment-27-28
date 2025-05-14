@@ -4,9 +4,7 @@ author: "Yazeed Aljohani"
 format: html
 ---
 
-## Introduction
 
-This analysis extracts and profiles the Cache la Poudre River in Fort Collins, CO using OpenStreetMap data and a DEM raster file. We compute and visualize river characteristics such as sinuosity, slope, and elevation profile.
 
 ---
 
@@ -129,8 +127,4 @@ ggplot(poudre_elev) +
   theme_minimal()
 ```
 
----
 
-## Conclusion
-
-I extracted and visualized the Cache la Poudre River and analyzed its topographic profile. The calculated sinuosity and slope reflect the river's physical characteristics in Fort Collins. These metrics can help interpret its geomorphology and potential hydrological behavior.
