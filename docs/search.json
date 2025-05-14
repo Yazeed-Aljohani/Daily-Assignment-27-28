@@ -1,0 +1,51 @@
+[
+  {
+    "objectID": "27and28.html#load-and-process-river-geometry",
+    "href": "27and28.html#load-and-process-river-geometry",
+    "title": "Poudre River Profile Analysis",
+    "section": "Load and Process River Geometry",
+    "text": "Load and Process River Geometry\n\nlibrary(osmdata)\n\nData (c) OpenStreetMap contributors, ODbL 1.0. https://www.openstreetmap.org/copyright\n\nlibrary(sf)\n\nLinking to GEOS 3.13.0, GDAL 3.8.5, PROJ 9.5.1; sf_use_s2() is TRUE\n\nlibrary(tidyverse)\n\n── Attaching core tidyverse packages ──────────────────────── tidyverse 2.0.0 ──\n✔ dplyr     1.1.4     ✔ readr     2.1.5\n✔ forcats   1.0.0     ✔ stringr   1.5.1\n✔ ggplot2   3.5.2     ✔ tibble    3.2.1\n✔ lubridate 1.9.4     ✔ tidyr     1.3.1\n✔ purrr     1.0.4     \n\n\n── Conflicts ────────────────────────────────────────── tidyverse_conflicts() ──\n✖ dplyr::filter() masks stats::filter()\n✖ dplyr::lag()    masks stats::lag()\nℹ Use the conflicted package (&lt;http://conflicted.r-lib.org/&gt;) to force all conflicts to become errors\n\n# Get waterways in Fort Collins\npoudre_osm &lt;- opq(\"Fort Collins, Colorado\") |&gt;\n  add_osm_feature(key = \"waterway\") |&gt;\n  osmdata_sf()\n\n# Filter for Cache la Poudre River\npoudre_lines &lt;- poudre_osm$osm_lines |&gt;\n  filter(grepl(\"Cache la Poudre\", name))\n\n# Merge and convert to sf\npoudre_river &lt;- st_union(poudre_lines) |&gt;\n  st_as_sf()\n\n# Calculate river length (in meters)\nriver_length_m &lt;- st_length(poudre_river)"
+  },
+  {
+    "objectID": "27and28.html#convert-river-to-points",
+    "href": "27and28.html#convert-river-to-points",
+    "title": "Poudre River Profile Analysis",
+    "section": "Convert River to Points",
+    "text": "Convert River to Points\n\npoudre_pts &lt;- st_cast(poudre_river, \"POINT\")"
+  },
+  {
+    "objectID": "27and28.html#load-dem-and-extract-elevation",
+    "href": "27and28.html#load-dem-and-extract-elevation",
+    "title": "Poudre River Profile Analysis",
+    "section": "Load DEM and Extract Elevation",
+    "text": "Load DEM and Extract Elevation\n\nlibrary(terra)\n\nterra 1.8.42\n\n\n\nAttaching package: 'terra'\n\n\nThe following object is masked from 'package:tidyr':\n\n    extract\n\nlibrary(glue)\n\n\nAttaching package: 'glue'\n\n\nThe following object is masked from 'package:terra':\n\n    trim\n\n# Load DEM from web using GDAL's virtual system interface\nurl &lt;- 'https://raw.githubusercontent.com/mikejohnson51/csu-ess-330/a993e03df117a76c609ff4c018055f8c821a6de9/resources/foco-elev.tif'\ndem &lt;- rast(glue::glue(\"/vsicurl/{url}\"))\n\n\n# Extract elevation values\nelev_values &lt;- extract(dem, vect(poudre_pts))\n\nWarning: [extract] transforming vector data to the CRS of the raster\n\n# Find name of elevation column\nelev_col &lt;- names(elev_values)[2]  # Second column holds the DEM values\n\n# Combine with spatial data and add ID\npoudre_elev &lt;- bind_cols(poudre_pts, elev_values) |&gt;\n  mutate(ID = row_number())"
+  },
+  {
+    "objectID": "27and28.html#compute-sinuosity",
+    "href": "27and28.html#compute-sinuosity",
+    "title": "Poudre River Profile Analysis",
+    "section": "Compute Sinuosity",
+    "text": "Compute Sinuosity\n\n# Straight-line distance between first and last point\nstraight_dist &lt;- st_distance(poudre_pts[1, ], poudre_pts[length(poudre_pts), ])\n\n# Sinuosity = actual river length / straight-line distance\nsinuosity &lt;- as.numeric(river_length_m / straight_dist)\n\nsinuosity\n\n[1] Inf"
+  },
+  {
+    "objectID": "27and28.html#compute-slope",
+    "href": "27and28.html#compute-slope",
+    "title": "Poudre River Profile Analysis",
+    "section": "Compute Slope",
+    "text": "Compute Slope\n\n# Elevation difference in cm\nelev_diff_cm &lt;- poudre_elev[[elev_col]][1] - poudre_elev[[elev_col]][nrow(poudre_elev)]\n\n# River length in cm\nriver_length_cm &lt;- as.numeric(river_length_m) * 100\n\n# Slope = elevation drop / river length\nslope &lt;- elev_diff_cm / river_length_cm\n\nslope\n\n[1] NA"
+  },
+  {
+    "objectID": "27and28.html#plot-river-elevation-profile",
+    "href": "27and28.html#plot-river-elevation-profile",
+    "title": "Poudre River Profile Analysis",
+    "section": "Plot River Elevation Profile",
+    "text": "Plot River Elevation Profile\n\nlibrary(ggplot2)\n\nggplot(poudre_elev, aes(x = ID, y = .data[[elev_col]])) +\n  geom_line(color = \"steelblue\") +\n  labs(\n    title = \"Elevation Profile Along Cache la Poudre River\",\n    x = \"Point ID Along River\",\n    y = \"Elevation (cm)\"\n  ) +\n  theme_minimal()\n\nWarning: Removed 3690 rows containing missing values or values outside the scale range\n(`geom_line()`)."
+  },
+  {
+    "objectID": "27and28.html#plot-spatial-river-profile",
+    "href": "27and28.html#plot-spatial-river-profile",
+    "title": "Poudre River Profile Analysis",
+    "section": "Plot Spatial River Profile",
+    "text": "Plot Spatial River Profile\n\nggplot(poudre_elev) +\n  geom_sf(aes(color = .data[[elev_col]])) +\n  scale_color_viridis_c(name = \"Elevation (cm)\") +\n  labs(\n    title = \"Spatial Elevation Profile of Cache la Poudre River\"\n  ) +\n  theme_minimal()"
+  }
+]
