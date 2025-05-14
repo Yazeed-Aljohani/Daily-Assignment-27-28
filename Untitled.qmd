@@ -1,0 +1,136 @@
+---
+title: "Poudre River Profile Analysis"
+author: "Yazeed Aljohani"
+format: html
+---
+
+## Introduction
+
+This analysis extracts and profiles the Cache la Poudre River in Fort Collins, CO using OpenStreetMap data and a DEM raster file. We compute and visualize river characteristics such as sinuosity, slope, and elevation profile.
+
+---
+
+## Load and Process River Geometry
+
+```{r}
+library(osmdata)
+library(sf)
+library(tidyverse)
+
+# Get waterways in Fort Collins
+poudre_osm <- opq("Fort Collins, Colorado") |>
+  add_osm_feature(key = "waterway") |>
+  osmdata_sf()
+
+# Filter for Cache la Poudre River
+poudre_lines <- poudre_osm$osm_lines |>
+  filter(grepl("Cache la Poudre", name))
+
+# Merge and convert to sf
+poudre_river <- st_union(poudre_lines) |>
+  st_as_sf()
+
+# Calculate river length (in meters)
+river_length_m <- st_length(poudre_river)
+```
+
+---
+
+## Convert River to Points
+
+```{r}
+poudre_pts <- st_cast(poudre_river, "POINT")
+```
+
+---
+
+## Load DEM and Extract Elevation
+
+```{r}
+library(terra)
+library(glue)
+
+# Load DEM from web using GDAL's virtual system interface
+url <- 'https://raw.githubusercontent.com/mikejohnson51/csu-ess-330/a993e03df117a76c609ff4c018055f8c821a6de9/resources/foco-elev.tif'
+dem <- rast(glue::glue("/vsicurl/{url}"))
+```
+
+```{r}
+# Extract elevation values
+elev_values <- extract(dem, vect(poudre_pts))
+
+# Find name of elevation column
+elev_col <- names(elev_values)[2]  # Second column holds the DEM values
+
+# Combine with spatial data and add ID
+poudre_elev <- bind_cols(poudre_pts, elev_values) |>
+  mutate(ID = row_number())
+```
+
+---
+
+## Compute Sinuosity
+
+```{r}
+# Straight-line distance between first and last point
+straight_dist <- st_distance(poudre_pts[1, ], poudre_pts[length(poudre_pts), ])
+
+# Sinuosity = actual river length / straight-line distance
+sinuosity <- as.numeric(river_length_m / straight_dist)
+
+sinuosity
+```
+
+---
+
+## Compute Slope
+
+```{r}
+# Elevation difference in cm
+elev_diff_cm <- poudre_elev[[elev_col]][1] - poudre_elev[[elev_col]][nrow(poudre_elev)]
+
+# River length in cm
+river_length_cm <- as.numeric(river_length_m) * 100
+
+# Slope = elevation drop / river length
+slope <- elev_diff_cm / river_length_cm
+
+slope
+```
+
+---
+
+## Plot River Elevation Profile
+
+```{r}
+library(ggplot2)
+
+ggplot(poudre_elev, aes(x = ID, y = .data[[elev_col]])) +
+  geom_line(color = "steelblue") +
+  labs(
+    title = "Elevation Profile Along Cache la Poudre River",
+    x = "Point ID Along River",
+    y = "Elevation (cm)"
+  ) +
+  theme_minimal()
+```
+
+---
+
+## Plot Spatial River Profile
+
+```{r}
+ggplot(poudre_elev) +
+  geom_sf(aes(color = .data[[elev_col]])) +
+  scale_color_viridis_c(name = "Elevation (cm)") +
+  labs(
+    title = "Spatial Elevation Profile of Cache la Poudre River"
+  ) +
+  theme_minimal()
+```
+
+---
+
+## Conclusion
+
+I extracted and visualized the Cache la Poudre River and analyzed its topographic profile. The calculated sinuosity and slope reflect the river's physical characteristics in Fort Collins. These metrics can help interpret its geomorphology and potential hydrological behavior.
